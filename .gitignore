@@ -1,6 +1,8 @@
 bin/
 obj/
+node_modules/
 /packages/
+package-lock.json
 riderModule.iml
 /_ReSharper.Caches/
 .idea/
