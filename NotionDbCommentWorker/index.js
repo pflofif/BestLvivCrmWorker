@@ -7,17 +7,24 @@ const notion = new Client({
 
 const companiesDatabaseId = process.env.COMPANIES_DB_ID;
 const informationBookDatabaseId = process.env.INFOBOOK_DB_ID;
+const projectsId = process.env.PROJECTS_ID;
 
 async function main() {
     try {
         const companies = await getDatabaseEntries(companiesDatabaseId);
         const informationBookEntries = await getDatabaseEntries(informationBookDatabaseId);
+        const projects = await getDatabaseEntries(projectsId);
 
-        createRelationsBetweenCompaniesAndPeople(informationBookEntries, companies);
-        console.log("Всі звязки успішно створені.");
+        //  createRelationsBetweenCompaniesAndPeople(informationBookEntries, companies);
+        //console.log("Всі звязки успішно створені.");
 
-        addCommentsToPage(companies);
-        console.log("Всі коментарі успішно додані.");
+        //console.log(projects)
+
+        createRelationsBetweenCompaniesAndProjects(companies, projects);
+        console.log("Всі компанії поєднанні з проєктами.");
+
+        //addCommentsToPage(companies);
+        //console.log("Всі коментарі успішно додані.");
     } catch (error) {
         console.error("Помилка при виконанні скрипта:", error);
     }
@@ -36,6 +43,72 @@ async function addCommentsToPage(companies) {
     });
 
     await Promise.all(commentTasks);
+}
+
+async function createRelationsBetweenCompaniesAndProjects(companies, projects) {
+    // whan company contain 1 relation to project
+    const updateTasks = projects.slice(0, 2).flatMap(project => {
+        const projectName = project.properties["Назва проекту"].title[0].plain_text;
+        console.log(projectName, "- Звязок в процесі")
+        const i = companies.filter(company => {
+            try {
+                const project = company.properties["Проєкт"].rich_text[0].plain_text;
+                return project == projectName;
+            } catch {
+                return false;
+            }
+        }).map(company => updateCompanyWithProjectRelation(company.id, project.id));
+    })
+
+    await Promise.all(updateTasks);
+
+    // create multiple
+    // const updateTasks = projects.flatMap(project => {
+    //     const projectName = project.properties["Назва проекту"].title[0].plain_text;
+    //     console.log(projectName, "- Звязок в процесі");
+
+    //     const i = companies.filter(company => {
+    //         try {
+    //             const project = company.properties["Проєкт"].rich_text[0].plain_text;
+
+    //             return project.includes(", ");
+    //             //return project == projectName;
+    //         } catch {
+    //             return false;
+    //         }
+    //     }).map(company => {
+    //         updateCompaniesSeveralRelationships(company.id, projects[0].id, projects[1].id);
+    //     })
+    //     //.map(company => updateCompanyWithProjectRelation(company.id, project.id));
+    // });
+
+    // await Promise.all(updateTasks);
+}
+
+
+async function updateCompaniesSeveralRelationships(companyId, ejf, bec) {
+    await notion.pages.update({
+        page_id: companyId,
+        properties: {
+            "посилання проєкт": {
+                type: "relation",
+                relation: [{ id: ejf }, { id: bec }],
+            },
+        },
+    });
+}
+
+
+async function updateCompanyWithProjectRelation(companyId, projectEntryId) {
+    await notion.pages.update({
+        page_id: companyId,
+        properties: {
+            "посилання проєкт": {
+                type: "relation",
+                relation: [{ id: projectEntryId }],
+            },
+        },
+    });
 }
 
 async function createRelationsBetweenCompaniesAndPeople(informationBookEntries, companies) {
