@@ -15,13 +15,38 @@ async function main() {
         const informationBookEntries = await getDatabaseEntries(informationBookDatabaseId);
         const projects = await getDatabaseEntries(projectsId);
 
+        const companiesNames = companies.map(entry =>
+        ({
+            name: entry.properties["Назва компанії"].title[0].plain_text.toLowerCase().replace(" ", ""),
+            id: entry.id
+        }))
+
+        const hackNames = hack7Companies.map(entry => ({
+            name: entry.properties["Назва компанії"].title[0].plain_text.toLowerCase().trim().replace(" ", ""),
+            id: entry.id,
+        }))
+        const excepted = hackNames.filter(hack =>
+            !companiesNames.map(c => c.name).includes(hack.name)
+        )
+        const filtered = excepted.filter(exceptedHack =>
+            !companiesNames.map(c => c.name).some(c => c.includes(exceptedHack.name))
+        )
+        const filteredHackIds = filtered.map(f => f.id)
+        const filteredHack = hack7Companies.filter(h =>
+            filteredHackIds.includes(h.id)
+        )
+        for (const hackCompany of filteredHack) {
+            await createPageInDatabase(hackCompany, hack.id);
+        }
+        console.log("End of program");
+
         //  createRelationsBetweenCompaniesAndPeople(informationBookEntries, companies);
         //console.log("Всі звязки успішно створені.");
 
         //console.log(projects)
 
-        createRelationsBetweenCompaniesAndProjects(companies, projects);
-        console.log("Всі компанії поєднанні з проєктами.");
+        //createRelationsBetweenCompaniesAndProjects(companies, projects);
+        //console.log("Всі компанії поєднанні з проєктами.");
 
         //addCommentsToPage(companies);
         //console.log("Всі коментарі успішно додані.");
@@ -29,6 +54,56 @@ async function main() {
         console.error("Помилка при виконанні скрипта:", error);
     }
 }
+
+async function createPageInDatabase(hackCompany, hackId) {
+    const name = hackCompany.properties["Назва компанії"].title[0].plain_text;
+    const properties = {
+        "Назва компанії": {
+            title: [
+                {
+                    text: {
+                        content: name,
+                    },
+                },
+            ],
+        },
+        "Проєкт": {
+            relation: [
+                {
+                    id: hackId,
+                },
+            ],
+        },
+    };
+
+    await notion.pages.create({
+        parent: { database_id: companiesDatabaseId },
+        properties: properties,
+    });
+
+    console.log(name);
+}
+
+async function updateCompanyWithHackRelation(companyId, hackId) {
+    const existingRelations = await notion.pages.retrieve({ page_id: companyId })
+        .then(page => page.properties["Проєкт"].relation.map(rel => ({ id: rel.id })))
+        .catch(() => []);
+
+    const newRelation = { id: hackId };
+    const updatedRelations = [...existingRelations, newRelation];
+
+    await notion.pages.update({
+        page_id: companyId,
+        properties: {
+            "Проєкт": {
+                relation: updatedRelations,
+            },
+        },
+    });
+
+    console.log(`Updated company ${companyId} with new hack relation ${hackId}`);
+}
+
 
 async function addCommentsToPage(companies) {
     const commentTasks = companies.map(async company => {
